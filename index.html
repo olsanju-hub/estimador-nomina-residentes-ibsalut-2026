@@ -119,10 +119,22 @@
               </label>
             </div>
 
+            <div class="guard-toolbar">
+              <label>
+                Ámbito
+                <select id="scope">
+                  <option value="hospital" selected>Hospital</option>
+                  <option value="primary">Centro de salud</option>
+                  <option value="manual">Manual</option>
+                </select>
+              </label>
+              <button type="button" id="recalculateHoursBtn" class="ghost small">Recalcular horas según ámbito</button>
+            </div>
+
             <div class="calendar-card">
               <div class="calendar-title">
                 <strong id="calendarLabel"></strong>
-                <span>17 h por defecto</span>
+                <span id="calendarHint">Horas según ámbito</span>
               </div>
               <div class="weekdays" aria-hidden="true">
                 <span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span>

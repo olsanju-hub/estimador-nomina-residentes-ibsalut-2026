@@ -54,7 +54,7 @@ const specialDays = {
   "2026-01-01": "Año Nuevo",
   "2026-12-24": "Especial IB-Salut",
   "2026-12-25": "Navidad",
-  "2026-12-31": "Especial IB-Salut"
+  "2026-12-31": "Revisar 31/12"
 };
 
 const publicHolidays = {
@@ -104,6 +104,18 @@ const typeLabels = {
   special: "Especial"
 };
 
+const scopeLabels = {
+  hospital: "Hospital",
+  primary: "Centro de salud",
+  manual: "Manual"
+};
+
+const paymentLabels = {
+  guard: "Hora de guardia",
+  ordinary: "Hora ordinaria",
+  manual: "Manual"
+};
+
 const state = {
   guards: new Map(),
   extraTouched: false,
@@ -123,7 +135,10 @@ const el = {
   triennials: document.querySelector("#triennials"),
   socialSecurity: document.querySelector("#socialSecurity"),
   usualGuards: document.querySelector("#usualGuards"),
+  scope: document.querySelector("#scope"),
+  recalculateHoursBtn: document.querySelector("#recalculateHoursBtn"),
   calendarLabel: document.querySelector("#calendarLabel"),
+  calendarHint: document.querySelector("#calendarHint"),
   calendar: document.querySelector("#calendar"),
   guardList: document.querySelector("#guardList"),
   hasVacation: document.querySelector("#hasVacation"),
@@ -174,16 +189,45 @@ function wireEvents() {
     state.irpfTouched = false;
     calculate();
   });
+  el.recalculateHoursBtn.addEventListener("click", recalculateAllHours);
   el.calculateBtn.addEventListener("click", calculate);
   el.resetBtn.addEventListener("click", resetAll);
   el.copyBtn.addEventListener("click", copySummary);
 }
 
 function handleInput(event) {
-  if (event.target.matches("[data-guard-hours]")) {
-    updateGuard(event.target.dataset.guardHours, { hours: toNumber(event.target.value) });
+  const target = event.target;
+
+  if (target.matches("[data-guard-hours]")) {
+    updateGuard(target.dataset.guardHours, {
+      hours: safePositive(toNumber(target.value)),
+      hoursEdited: true,
+      hoursMode: "direct"
+    });
     return;
   }
+
+  if (target.matches("[data-guard-time]")) {
+    const key = target.dataset.guardTime;
+    const field = target.dataset.timeField;
+    const guard = state.guards.get(key);
+    if (!guard) return;
+    const patch = { [field]: target.value, hoursMode: "schedule", hoursEdited: true };
+    const start = field === "startTime" ? target.value : guard.startTime;
+    const end = field === "endTime" ? target.value : guard.endTime;
+    const hours = calculateScheduleHours(start, end);
+    if (hours !== null) patch.hours = hours;
+    updateGuard(key, patch);
+    return;
+  }
+
+  if (target.matches("[data-guard-money]")) {
+    const key = target.dataset.guardMoney;
+    const field = target.dataset.moneyField;
+    updateGuard(key, { [field]: target.value });
+    return;
+  }
+
   calculate();
 }
 
@@ -203,8 +247,42 @@ function handleChange(event) {
     el.vacationOptions.classList.toggle("hidden", !target.checked);
   }
 
+  if (target.id === "scope") {
+    updateCalendarHint();
+  }
+
+  if (target.matches("[data-guard-scope]")) {
+    const key = target.dataset.guardScope;
+    const guard = state.guards.get(key);
+    if (!guard) return;
+    const patch = { scope: target.value };
+    if (!guard.hoursEdited && !isDec31(key)) patch.hours = defaultHoursForGuard(key, target.value);
+    updateGuard(key, patch);
+    return;
+  }
+
   if (target.matches("[data-guard-type]")) {
-    updateGuard(target.dataset.guardType, { type: target.value, manualType: true });
+    updateGuard(target.dataset.guardType, { dayType: target.value, dayTypeEdited: true });
+    return;
+  }
+
+  if (target.matches("[data-hours-mode]")) {
+    updateGuard(target.dataset.hoursMode, { hoursMode: target.value });
+    return;
+  }
+
+  if (target.matches("[data-payment-type]")) {
+    updateGuard(target.dataset.paymentType, { paymentType: target.value });
+    return;
+  }
+
+  if (target.matches("[data-payment-override]")) {
+    updateGuard(target.dataset.paymentOverride, { paymentOverride: target.value });
+    return;
+  }
+
+  if (target.matches("[data-dec31-mode]")) {
+    applyDec31Mode(target.dataset.dec31Mode, target.value);
     return;
   }
 
@@ -222,6 +300,7 @@ function resetAll() {
   el.children.value = "2";
   el.year.value = "2026";
   el.month.value = "5";
+  el.scope.value = "hospital";
   el.irpf.value = "17";
   el.socialSecurity.value = String(socialSecurityDefaults.rate);
   el.vacationOptions.classList.add("hidden");
@@ -246,6 +325,7 @@ function renderCalendar() {
   const validKeys = new Set();
 
   el.calendarLabel.textContent = `${monthNames[month - 1]} ${year}`;
+  updateCalendarHint();
   el.calendar.innerHTML = "";
 
   for (let index = 0; index < startOffset; index += 1) {
@@ -262,9 +342,9 @@ function renderCalendar() {
     const type = classifyDate(key);
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `day ${type}`;
+    button.className = `day ${type} ${isDec31(key) ? "review" : ""}`;
     if (state.guards.has(key)) button.classList.add("selected");
-    button.innerHTML = `<span>${day}</span><span class="badge">${shortType(type)}</span>`;
+    button.innerHTML = `<span>${day}</span><span class="badge">${isDec31(key) ? "REV" : shortType(type)}</span>`;
     button.setAttribute("aria-pressed", state.guards.has(key) ? "true" : "false");
     button.addEventListener("click", () => toggleGuard(key));
     el.calendar.append(button);
@@ -281,15 +361,34 @@ function toggleGuard(key) {
   if (state.guards.has(key)) {
     state.guards.delete(key);
   } else {
-    state.guards.set(key, {
-      date: key,
-      hours: 17,
-      type: classifyDate(key),
-      manualType: false
-    });
+    state.guards.set(key, createGuard(key));
   }
   renderCalendar();
   calculate();
+}
+
+function createGuard(key) {
+  const scope = el.scope.value;
+  const dayType = classifyDate(key);
+  const dec31 = isDec31(key);
+  return {
+    date: key,
+    scope,
+    dayType,
+    dayTypeEdited: false,
+    hoursMode: "direct",
+    startTime: "",
+    endTime: "",
+    hours: dec31 ? 0 : defaultHoursForGuard(key, scope),
+    hoursEdited: false,
+    paymentType: "guard",
+    paymentOverride: "auto",
+    manualHourlyRate: "",
+    manualTotalAmount: "",
+    ordinaryHourlyRate: "",
+    partialManualAmount: "",
+    dec31Mode: dec31 ? "" : "normal"
+  };
 }
 
 function updateGuard(key, patch) {
@@ -298,6 +397,60 @@ function updateGuard(key, patch) {
   state.guards.set(key, { ...guard, ...patch });
   renderGuardList();
   calculate();
+}
+
+function recalculateAllHours() {
+  state.guards.forEach((guard, key) => {
+    if (isDec31(key)) return;
+    state.guards.set(key, {
+      ...guard,
+      scope: el.scope.value,
+      hours: defaultHoursForGuard(key, el.scope.value),
+      hoursMode: "direct",
+      hoursEdited: false
+    });
+  });
+  renderGuardList();
+  calculate();
+  showWarning("Horas recalculadas según ámbito.", false);
+}
+
+function applyDec31Mode(key, mode) {
+  const guard = state.guards.get(key);
+  if (!guard) return;
+  const patch = { dec31Mode: mode, hoursMode: "direct" };
+
+  if (mode === "guard17") {
+    patch.hours = 17;
+    patch.paymentType = "guard";
+    patch.paymentOverride = "auto";
+  }
+  if (mode === "guard24") {
+    patch.hours = 24;
+    patch.paymentType = "guard";
+    patch.paymentOverride = "auto";
+  }
+  if (mode === "special17") {
+    patch.hours = 17;
+    patch.dayType = "special";
+    patch.dayTypeEdited = true;
+    patch.paymentType = "guard";
+    patch.paymentOverride = "auto";
+  }
+  if (mode === "special24") {
+    patch.hours = 24;
+    patch.dayType = "special";
+    patch.dayTypeEdited = true;
+    patch.paymentType = "guard";
+    patch.paymentOverride = "auto";
+  }
+  if (mode === "manual") {
+    patch.paymentType = "manual";
+    patch.paymentOverride = "manualAmount";
+  }
+
+  patch.hoursEdited = mode !== "";
+  updateGuard(key, patch);
 }
 
 function renderGuardList() {
@@ -313,26 +466,64 @@ function renderGuardList() {
   }
 
   guards.forEach((guard) => {
-    const rates = currentRates();
-    const rate = rates[guard.type] || 0;
-    const amount = rate * safePositive(guard.hours);
+    const calc = calculateGuardAmount(guard);
+    const partial = guard.hours > 0 && guard.hours < 14.5;
     const row = document.createElement("div");
-    row.className = "guard-row";
+    row.className = `guard-row ${partial ? "is-partial" : ""}`;
     row.innerHTML = `
-      <div class="guard-date">${formatDateShort(guard.date)}<span>${typeLabels[guard.type]}</span></div>
-      <label>Tipo
-        <select data-guard-type="${guard.date}">
-          <option value="weekday"${guard.type === "weekday" ? " selected" : ""}>Laborable</option>
-          <option value="holiday"${guard.type === "holiday" ? " selected" : ""}>Sábado/festivo</option>
-          <option value="special"${guard.type === "special" ? " selected" : ""}>Especial</option>
-        </select>
-      </label>
-      <label>Horas
-        <input data-guard-hours="${guard.date}" type="number" min="0" max="24" step="0.5" value="${guard.hours}">
-      </label>
-      <div class="rate">${formatCurrency(rate)}/h<br><strong>${formatCurrency(amount)}</strong></div>
-      <button type="button" class="icon-btn" aria-label="Eliminar guardia">×</button>
+      <div class="guard-top">
+        <div class="guard-date">
+          ${formatDateShort(guard.date)}
+          <span>${scopeLabels[guard.scope]} · ${typeLabels[guard.dayType]}</span>
+          ${guard.hoursEdited || guard.dayTypeEdited ? '<em>Editada</em>' : ""}
+        </div>
+        <label>Ámbito
+          <select data-guard-scope="${guard.date}">
+            <option value="hospital"${guard.scope === "hospital" ? " selected" : ""}>Hospital</option>
+            <option value="primary"${guard.scope === "primary" ? " selected" : ""}>Centro salud</option>
+            <option value="manual"${guard.scope === "manual" ? " selected" : ""}>Manual</option>
+          </select>
+        </label>
+        <label>Tipo día
+          <select data-guard-type="${guard.date}">
+            <option value="weekday"${guard.dayType === "weekday" ? " selected" : ""}>Laborable</option>
+            <option value="holiday"${guard.dayType === "holiday" ? " selected" : ""}>Festivo</option>
+            <option value="special"${guard.dayType === "special" ? " selected" : ""}>Especial</option>
+          </select>
+        </label>
+        <label>Horas
+          <input data-guard-hours="${guard.date}" type="number" min="0" max="24" step="0.5" value="${formatInputNumber(guard.hours)}">
+        </label>
+        <div class="rate">${calc.rateLabel}<br><strong>${formatCurrency(calc.amount)}</strong></div>
+        <button type="button" class="icon-btn" aria-label="Eliminar guardia">×</button>
+      </div>
+
+      ${isDec31(guard.date) ? renderDec31Controls(guard) : ""}
+      ${partial ? renderPartialControls(guard) : ""}
+
+      <details class="guard-details"${guard.hoursMode === "schedule" || guard.paymentOverride !== "auto" ? " open" : ""}>
+        <summary>Editar pago</summary>
+        <div class="guard-extra-grid">
+          <label>Horas
+            <select data-hours-mode="${guard.date}">
+              <option value="direct"${guard.hoursMode === "direct" ? " selected" : ""}>Horas directas</option>
+              <option value="schedule"${guard.hoursMode === "schedule" ? " selected" : ""}>Calcular por horario</option>
+            </select>
+          </label>
+          ${guard.hoursMode === "schedule" ? renderTimeControls(guard) : ""}
+          <label>Pago
+            <select data-payment-override="${guard.date}">
+              <option value="auto"${guard.paymentOverride === "auto" ? " selected" : ""}>Tarifa automática</option>
+              <option value="manualRate"${guard.paymentOverride === "manualRate" ? " selected" : ""}>Precio/h manual</option>
+              <option value="manualAmount"${guard.paymentOverride === "manualAmount" ? " selected" : ""}>Importe manual</option>
+            </select>
+          </label>
+          ${guard.paymentOverride === "manualRate" ? renderMoneyInput(guard, "manualHourlyRate", "Precio/h manual (€)") : ""}
+          ${guard.paymentOverride === "manualAmount" ? renderMoneyInput(guard, "manualTotalAmount", "Importe total (€)") : ""}
+        </div>
+      </details>
     `;
+
     row.querySelector(".icon-btn").addEventListener("click", () => {
       state.guards.delete(guard.date);
       renderCalendar();
@@ -342,6 +533,59 @@ function renderGuardList() {
   });
 }
 
+function renderDec31Controls(guard) {
+  return `
+    <div class="guard-alert">31/12: confirma horas y tarifa.</div>
+    <label class="wide-label">31 de diciembre
+      <select data-dec31-mode="${guard.date}">
+        <option value=""${guard.dec31Mode === "" ? " selected" : ""}>Revisar</option>
+        <option value="guard17"${guard.dec31Mode === "guard17" ? " selected" : ""}>Guardia 17 h</option>
+        <option value="guard24"${guard.dec31Mode === "guard24" ? " selected" : ""}>Guardia 24 h</option>
+        <option value="special17"${guard.dec31Mode === "special17" ? " selected" : ""}>Especial 17 h</option>
+        <option value="special24"${guard.dec31Mode === "special24" ? " selected" : ""}>Especial 24 h</option>
+        <option value="manual"${guard.dec31Mode === "manual" ? " selected" : ""}>Manual</option>
+      </select>
+    </label>
+  `;
+}
+
+function renderPartialControls(guard) {
+  return `
+    <div class="guard-alert">Este turno es menor de 14,5 h. Indica cómo se paga.</div>
+    <div class="guard-extra-grid">
+      <label>Tipo de pago
+        <select data-payment-type="${guard.date}">
+          <option value="guard"${guard.paymentType === "guard" ? " selected" : ""}>Hora de guardia</option>
+          <option value="ordinary"${guard.paymentType === "ordinary" ? " selected" : ""}>Hora ordinaria</option>
+          <option value="manual"${guard.paymentType === "manual" ? " selected" : ""}>Manual</option>
+        </select>
+      </label>
+      ${guard.paymentType === "ordinary" ? renderMoneyInput(guard, "ordinaryHourlyRate", "Precio/hora ordinaria (€)") : ""}
+      ${guard.paymentType === "manual" ? renderMoneyInput(guard, "partialManualAmount", "Importe del turno (€)") : ""}
+    </div>
+  `;
+}
+
+function renderTimeControls(guard) {
+  return `
+    <label>Inicio
+      <input data-guard-time="${guard.date}" data-time-field="startTime" type="time" value="${guard.startTime}">
+    </label>
+    <label>Fin
+      <input data-guard-time="${guard.date}" data-time-field="endTime" type="time" value="${guard.endTime}">
+    </label>
+  `;
+}
+
+function renderMoneyInput(guard, field, label) {
+  const value = guard[field] ?? "";
+  return `
+    <label>${label}
+      <input data-guard-money="${guard.date}" data-money-field="${field}" type="number" min="0" step="0.01" value="${value}">
+    </label>
+  `;
+}
+
 function calculate() {
   const validation = validateInputs();
   if (!validation.ok) {
@@ -349,7 +593,9 @@ function calculate() {
     return;
   }
 
-  hideWarning();
+  const softWarning = getSoftWarning();
+  if (softWarning) showWarning(softWarning, false);
+  else hideWarning();
 
   const profile = el.profile.value;
   const resident = el.residencyYear.value;
@@ -374,7 +620,7 @@ function calculate() {
   const irpf = gross * irpfRate / 100;
   const net = gross - socialSecurity - irpf;
 
-  const result = {
+  renderResults({
     fixed,
     guards: guardTotals,
     vacationProration,
@@ -384,32 +630,90 @@ function calculate() {
     irpf,
     irpfRate,
     net
-  };
-
-  renderResults(result);
+  });
 }
 
 function calculateGuardTotals() {
-  const rates = currentRates();
   const totals = {
     count: 0,
     weekdayHours: 0,
     holidayHours: 0,
     specialHours: 0,
+    ordinaryManualHours: 0,
+    ordinaryManualAmount: 0,
+    partialManualCount: 0,
     total: 0
   };
 
   sortedGuards().forEach((guard) => {
     const hours = safePositive(guard.hours);
-    const type = guard.type;
+    const calc = calculateGuardAmount(guard);
     totals.count += 1;
-    totals.total += hours * (rates[type] || 0);
-    if (type === "weekday") totals.weekdayHours += hours;
-    if (type === "holiday") totals.holidayHours += hours;
-    if (type === "special") totals.specialHours += hours;
+    totals.total += calc.amount;
+
+    if (guard.dayType === "weekday") totals.weekdayHours += hours;
+    if (guard.dayType === "holiday") totals.holidayHours += hours;
+    if (guard.dayType === "special") totals.specialHours += hours;
+    if (calc.isManualOrOrdinary) {
+      totals.ordinaryManualHours += hours;
+      totals.ordinaryManualAmount += calc.amount;
+      totals.partialManualCount += 1;
+    }
   });
 
   return totals;
+}
+
+function calculateGuardAmount(guard) {
+  const hours = safePositive(guard.hours);
+  const rates = currentRates();
+  const automaticRate = rates[guard.dayType] || 0;
+  const partial = hours > 0 && hours < 14.5;
+
+  if (guard.paymentOverride === "manualAmount") {
+    return {
+      amount: safePositive(toNumber(guard.manualTotalAmount)),
+      rate: 0,
+      rateLabel: "Manual",
+      isManualOrOrdinary: true
+    };
+  }
+
+  if (guard.paymentOverride === "manualRate") {
+    const rate = safePositive(toNumber(guard.manualHourlyRate));
+    return {
+      amount: hours * rate,
+      rate,
+      rateLabel: `${formatCurrency(rate)}/h`,
+      isManualOrOrdinary: true
+    };
+  }
+
+  if (partial && guard.paymentType === "ordinary") {
+    const rate = safePositive(toNumber(guard.ordinaryHourlyRate));
+    return {
+      amount: hours * rate,
+      rate,
+      rateLabel: rate > 0 ? `${formatCurrency(rate)}/h` : "Ordinaria",
+      isManualOrOrdinary: true
+    };
+  }
+
+  if (partial && guard.paymentType === "manual") {
+    return {
+      amount: safePositive(toNumber(guard.partialManualAmount)),
+      rate: 0,
+      rateLabel: "Manual",
+      isManualOrOrdinary: true
+    };
+  }
+
+  return {
+    amount: hours * automaticRate,
+    rate: automaticRate,
+    rateLabel: `${formatCurrency(automaticRate)}/h`,
+    isManualOrOrdinary: false
+  };
 }
 
 function calculateVacationProration() {
@@ -430,12 +734,16 @@ function renderResults(result) {
   const metrics = [
     ["Fijo mensual", formatCurrency(result.fixed)],
     ["Guardias reales", formatCurrency(result.guards.total)],
-    ["Guardias", String(result.guards.count)],
+    ["Guardias/turnos", String(result.guards.count)],
     ["Horas laborables", formatHours(result.guards.weekdayHours)],
-    ["Horas sábado/festivo", formatHours(result.guards.holidayHours)],
+    ["Horas festivas", formatHours(result.guards.holidayHours)],
     ["Horas especiales", formatHours(result.guards.specialHours)]
   ];
 
+  if (result.guards.ordinaryManualAmount > 0) {
+    metrics.push(["Turnos manuales/ordinarios", formatCurrency(result.guards.ordinaryManualAmount)]);
+    metrics.push(["Horas ordinarias/manuales", formatHours(result.guards.ordinaryManualHours)]);
+  }
   if (result.vacationProration > 0) metrics.push(["Prorrateo vacaciones", formatCurrency(result.vacationProration)]);
   if (result.extraPay > 0) metrics.push(["Paga extra", formatCurrency(result.extraPay)]);
 
@@ -462,8 +770,12 @@ function buildSummary(result) {
   const island = el.island.value;
   const month = monthNames[toNumber(el.month.value) - 1];
   const year = el.year.value;
-  const guards = result.guards.count === 1 ? "1 guardia" : `${result.guards.count} guardias`;
-  return `${resident} en ${island} · ${month} ${year} · ${guards} · IRPF ${formatPercent(result.irpfRate)} · bruto estimado ${formatCurrency(result.gross)} · neto estimado ${formatCurrency(result.net)}.`;
+  const guardCount = result.guards.count - result.guards.partialManualCount;
+  const guardText = guardCount === 1 ? "1 guardia" : `${Math.max(0, guardCount)} guardias`;
+  const partialText = result.guards.partialManualCount > 0
+    ? ` + ${result.guards.partialManualCount} turno${result.guards.partialManualCount === 1 ? " parcial" : "s parciales"}`
+    : "";
+  return `${resident} ${island} · ${month} ${year} · ${guardText}${partialText} · IRPF ${formatPercent(result.irpfRate)} · bruto estimado ${formatCurrency(result.gross)} · neto estimado ${formatCurrency(result.net)}.`;
 }
 
 async function copySummary() {
@@ -492,16 +804,42 @@ function validateInputs() {
 
   for (const guard of state.guards.values()) {
     if (toNumber(guard.hours) < 0) return { ok: false, message: "Las horas no pueden ser negativas." };
+    const moneyFields = ["manualHourlyRate", "manualTotalAmount", "ordinaryHourlyRate", "partialManualAmount"];
+    for (const field of moneyFields) {
+      if (toNumber(guard[field]) < 0) return { ok: false, message: "Los importes no pueden ser negativos." };
+    }
   }
 
   if (toNumber(el.irpf.value) > 60) return { ok: false, message: "IRPF superior al 60%. Revísalo antes de calcular." };
   return { ok: true };
 }
 
+function getSoftWarning() {
+  for (const guard of state.guards.values()) {
+    if (isDec31(guard.date) && !guard.dec31Mode) return "31/12: confirma horas y tarifa.";
+    if (guard.hours > 0 && guard.hours < 14.5 && guard.paymentType === "ordinary" && !toNumber(guard.ordinaryHourlyRate)) {
+      return "Introduce precio/hora ordinaria.";
+    }
+    if (guard.hours > 0 && guard.hours < 14.5 && guard.paymentType === "manual" && !toNumber(guard.partialManualAmount)) {
+      return "Introduce importe del turno.";
+    }
+  }
+  return "";
+}
+
 function currentRates() {
   const profile = el.profile.value;
   const resident = el.residencyYear.value;
   return guardRates[profile]?.[resident] || { weekday: 0, holiday: 0, special: 0 };
+}
+
+function defaultHoursForGuard(key, scope) {
+  if (scope === "manual") return 17;
+  const type = classifyDate(key);
+  if (type === "special" || type === "holiday") return 24;
+  const day = parseDateKey(key).getDay();
+  if (scope === "primary") return day >= 1 && day <= 4 ? 14.5 : 17;
+  return 17;
 }
 
 function classifyDate(key) {
@@ -511,6 +849,24 @@ function classifyDate(key) {
   const weekday = date.getDay();
   if (weekday === 0 || weekday === 6) return "holiday";
   return "weekday";
+}
+
+function calculateScheduleHours(start, end) {
+  if (!start || !end) return null;
+  const startMinutes = timeToMinutes(start);
+  let endMinutes = timeToMinutes(end);
+  if (endMinutes < startMinutes) endMinutes += 24 * 60;
+  return Math.round(((endMinutes - startMinutes) / 60) * 100) / 100;
+}
+
+function timeToMinutes(value) {
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function updateCalendarHint() {
+  const text = el.scope.value === "primary" ? "CS: 14,5 h L-J; 17 h V" : el.scope.value === "hospital" ? "Hospital: 17 h laborable" : "Manual editable";
+  el.calendarHint.textContent = text;
 }
 
 function shortType(type) {
@@ -548,6 +904,10 @@ function parseDateKey(key) {
   return new Date(year, month - 1, day);
 }
 
+function isDec31(key) {
+  return key.endsWith("-12-31");
+}
+
 function formatDateShort(key) {
   const date = parseDateKey(key);
   return new Intl.DateTimeFormat("es-ES", { day: "2-digit", month: "short" }).format(date);
@@ -563,6 +923,10 @@ function formatHours(value) {
 
 function formatPercent(value) {
   return `${new Intl.NumberFormat("es-ES", { maximumFractionDigits: 1 }).format(value || 0)}%`;
+}
+
+function formatInputNumber(value) {
+  return String(value || 0);
 }
 
 function toNumber(value) {

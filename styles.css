@@ -264,6 +264,14 @@ button:focus-visible {
   min-height: 38px;
 }
 
+.guard-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) auto;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 10px;
+}
+
 .calendar-card,
 .vacation-card {
   border: 1px solid var(--line);
@@ -335,6 +343,10 @@ button:focus-visible {
   color: var(--mustard);
 }
 
+.day.review .badge {
+  color: var(--red);
+}
+
 .day.holiday .badge {
   color: var(--petrol);
 }
@@ -347,13 +359,18 @@ button:focus-visible {
 
 .guard-row {
   display: grid;
-  grid-template-columns: 1fr 118px 86px 96px 40px;
   gap: 8px;
-  align-items: end;
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
+}
+
+.guard-top {
+  display: grid;
+  grid-template-columns: minmax(118px, 1fr) 118px 108px 78px 96px 40px;
+  gap: 8px;
+  align-items: end;
 }
 
 .guard-date {
@@ -369,10 +386,54 @@ button:focus-visible {
   font-weight: 750;
 }
 
+.guard-date em {
+  width: fit-content;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #fff6df;
+  color: #76520b;
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
 .guard-row input,
 .guard-row select {
   min-height: 38px;
   padding: 7px 8px;
+}
+
+.guard-alert {
+  padding: 7px 9px;
+  border: 1px solid #f0cf8c;
+  border-radius: 8px;
+  background: #fff8e8;
+  color: #76520b;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.guard-details {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.guard-details summary {
+  color: var(--petrol);
+  font-size: 0.84rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.guard-extra-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.wide-label {
+  max-width: 320px;
 }
 
 .icon-btn {
@@ -492,11 +553,20 @@ footer {
     padding: 12px;
   }
 
-  .guard-row {
+  .guard-toolbar,
+  .guard-top,
+  .guard-extra-grid {
     grid-template-columns: 1fr 1fr;
   }
 
-  .guard-row .icon-btn {
+  .guard-date,
+  .guard-alert,
+  .guard-details,
+  .wide-label {
+    grid-column: 1 / -1;
+  }
+
+  .guard-top .icon-btn {
     grid-column: 2;
   }
 
