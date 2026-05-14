@@ -977,6 +977,7 @@ function renderPrintSummary(result) {
 
   el.printSummary.innerHTML = `
     <div class="print-header">
+      <img class="print-logo" src="assets/favicon.svg" alt="">
       <div>
         <h1>Resumen estimativo de nómina</h1>
         <p>Residentes IB-Salut 2026</p>

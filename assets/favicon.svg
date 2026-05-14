@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Icono Estimador nómina residentes">
+  <defs>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="5" flood-color="#0a4248" flood-opacity=".14"/>
+    </filter>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="30" fill="#f4f6f5"/>
+  <g filter="url(#softShadow)">
+    <path fill="#0f5960" d="M55 28h18c4.4 0 8 3.6 8 8v19h19c4.4 0 8 3.6 8 8v18c0 4.4-3.6 8-8 8H81v19c0 4.4-3.6 8-8 8H55c-4.4 0-8-3.6-8-8V89H28c-4.4 0-8-3.6-8-8V63c0-4.4 3.6-8 8-8h19V36c0-4.4 3.6-8 8-8Z"/>
+    <path fill="#f4f6f5" d="M60 39h8c2.2 0 4 1.8 4 4v23h23c2.2 0 4 1.8 4 4v4c0 2.2-1.8 4-4 4H72v23c0 2.2-1.8 4-4 4h-8c-2.2 0-4-1.8-4-4V78H33c-2.2 0-4-1.8-4-4v-4c0-2.2 1.8-4 4-4h23V43c0-2.2 1.8-4 4-4Z"/>
+    <path fill="#0f5960" d="M60 47h8v27h27v4H68v27h-8V78H33v-4h27z" opacity=".18"/>
+    <path fill="#d59b1d" d="M85.8 91.2c-11.7 0-20.3-6.7-23.2-17H57v-7h4.4c-.1-1-.1-1.9-.1-2.9 0-.9 0-1.7.1-2.6H57v-7h5.5c3-10.1 11.5-16.7 23-16.7 6.2 0 11.6 1.8 15.8 5.2l-5.4 8.3c-2.8-2.2-6.1-3.3-10-3.3-5.6 0-9.9 2.4-12.3 6.5h17.8l-2 7H71.7c-.1.8-.1 1.7-.1 2.6 0 1 0 1.9.1 2.9h16.4l-2 7H73.8c2.5 4.3 6.8 6.8 12.5 6.8 4.3 0 7.9-1.3 10.9-4l5.6 8.1c-4.5 4-10.2 6.1-17 6.1Z"/>
+  </g>
+</svg>

@@ -36,6 +36,7 @@ No se ha localizado una tabla IB-Salut 2026 completa publicada para sustituir la
 - Las guardias 5.ª y siguientes aplican el tramo oficial de personal facultativo en formación si el día no es especial.
 - En días especiales se prioriza la tarifa especial; la tabla no aclara una combinación separada con el tramo 5.ª.
 - El resumen final puede imprimirse o guardarse como PDF con `Imprimir / PDF`; es orientativo y no oficial.
+- Incluye icono local, favicon y manifest PWA sin logos oficiales.
 
 ## Datos
 
