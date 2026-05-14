@@ -35,12 +35,39 @@ const islandAllowance = {
 
 const guardRates = {
   facultativo: {
-    R1: { weekday: 19.25, holiday: 21.63, special: 43.26 },
-    R2: { weekday: 22.12, holiday: 24.86, special: 49.72 },
-    R3: { weekday: 24.96, holiday: 28.05, special: 56.10 },
-    R4: { weekday: 28.06, holiday: 31.52, special: 63.04 },
-    R5: { weekday: 28.06, holiday: 31.52, special: 63.04 }
+    R1: {
+      normal: { weekday: 19.00, holiday: 20.90 },
+      fifthAndFollowing: { weekday: 23.76, holiday: 26.12 },
+      special: 41.80
+    },
+    R2: {
+      normal: { weekday: 20.76, holiday: 22.84 },
+      fifthAndFollowing: { weekday: 25.95, holiday: 28.56 },
+      special: 45.67
+    },
+    R3: {
+      normal: { weekday: 23.14, holiday: 25.46 },
+      fifthAndFollowing: { weekday: 28.94, holiday: 31.83 },
+      special: 50.91
+    },
+    R4: {
+      normal: { weekday: 25.52, holiday: 28.06 },
+      fifthAndFollowing: { weekday: 31.90, holiday: 35.08 },
+      special: 56.15
+    },
+    R5: {
+      normal: { weekday: 25.52, holiday: 28.06 },
+      fifthAndFollowing: { weekday: 31.90, holiday: 35.08 },
+      special: 56.15
+    }
   }
+};
+
+const payrollDataMeta = {
+  baseYear: 2025,
+  targetYear: 2026,
+  updateFactor: 1.025,
+  fifthGuardRule: "Las guardias 5.ª y siguientes usan el tramo oficial si el día no es especial. En días especiales se prioriza la tarifa especial."
 };
 
 const extraPayRules = {
@@ -156,14 +183,15 @@ const el = {
   includeVacationProration: document.querySelector("#includeVacationProration"),
   prorationMode: document.querySelector("#prorationMode"),
   manualProration: document.querySelector("#manualProration"),
-  usualWeekdayGuards: document.querySelector("#usualWeekdayGuards"),
-  usualHolidayGuards: document.querySelector("#usualHolidayGuards"),
-  usualSpecialGuards: document.querySelector("#usualSpecialGuards"),
+  vacationDays: document.querySelector("#vacationDays"),
+  averageGuardAmount: document.querySelector("#averageGuardAmount"),
   warning: document.querySelector("#warning"),
   resultsGrid: document.querySelector("#resultsGrid"),
   netTotal: document.querySelector("#netTotal"),
   summaryText: document.querySelector("#summaryText"),
   copyBtn: document.querySelector("#copyBtn"),
+  printBtn: document.querySelector("#printBtn"),
+  printSummary: document.querySelector("#printSummary"),
   resetBtn: document.querySelector("#resetBtn"),
   calculateBtn: document.querySelector("#calculateBtn"),
   suggestIrpfBtn: document.querySelector("#suggestIrpfBtn"),
@@ -212,6 +240,10 @@ function wireEvents() {
   el.calculateBtn.addEventListener("click", calculate);
   el.resetBtn.addEventListener("click", resetAll);
   el.copyBtn.addEventListener("click", copySummary);
+  el.printBtn.addEventListener("click", () => {
+    calculate();
+    window.print();
+  });
   el.stepTabs.forEach((button) => {
     button.addEventListener("click", () => setStep(button.dataset.goStep));
   });
@@ -261,6 +293,10 @@ function handleChange(event) {
     syncExtraPay(false);
     updateMonthLabels();
     renderCalendar();
+  }
+
+  if (target.id === "residencyYear" || target.id === "profile") {
+    renderGuardList();
   }
 
   if (target.id === "customGuardMonth") {
@@ -342,6 +378,8 @@ function resetAll() {
   el.scope.value = "hospital";
   el.irpf.value = "17";
   el.socialSecurity.value = String(socialSecurityDefaults.rate);
+  el.vacationDays.value = "0";
+  el.averageGuardAmount.value = "1200";
   el.vacationOptions.classList.add("hidden");
   syncGuardMonth(true);
   syncExtraPay(true);
@@ -516,7 +554,8 @@ function renderGuardList() {
   }
 
   guards.forEach((guard) => {
-    const calc = calculateGuardAmount(guard);
+    const guardIndex = getGuardIndex(guard.date);
+    const calc = getGuardAmount(guard, el.residencyYear.value, guardIndex);
     const partial = guard.hours > 0 && guard.hours < 14.5;
     const row = document.createElement("div");
     row.className = `guard-row ${partial ? "is-partial" : ""}`;
@@ -524,7 +563,8 @@ function renderGuardList() {
       <div class="guard-top">
         <div class="guard-date">
           ${formatDateShort(guard.date)}
-          <span>${scopeLabels[guard.scope]} · ${typeLabels[guard.dayType]}</span>
+          <span>${guardIndex ? `${guardIndex}.ª guardia · ` : ""}${scopeLabels[guard.scope]} · ${typeLabels[guard.dayType]}</span>
+          ${calc.isFifthRate ? '<em>5.ª y sig.</em>' : ""}
           ${guard.hoursEdited || guard.dayTypeEdited ? '<em>Editada</em>' : ""}
         </div>
         <label>Ámbito
@@ -647,44 +687,92 @@ function calculate() {
   if (softWarning) showWarning(softWarning, false);
   else hideWarning();
 
-  const profile = el.profile.value;
-  const resident = el.residencyYear.value;
-  const table = salaryTables[profile];
-
+  const table = salaryTables[el.profile.value];
   if (!table.enabled) {
     showWarning(table.message, true);
     return;
   }
 
-  const base = table.baseSalary[resident];
-  const training = table.trainingComplement[resident];
-  const island = islandAllowance[el.island.value];
-  const fixed = base + training + island;
-  const guardTotals = calculateGuardTotals();
-  const vacationProration = calculateVacationProration();
-  const extraPay = el.includeExtra.checked ? extraPayRules.baseExtraAmount + training : 0;
-  const gross = fixed + guardTotals.total + vacationProration + extraPay;
-  const socialSecurity = gross * safePositive(toNumber(el.socialSecurity.value)) / 100;
-  const irpfRate = safePositive(toNumber(el.irpf.value));
-  const irpf = gross * irpfRate / 100;
-  const net = gross - socialSecurity - irpf;
+  renderResults(computePayroll());
+}
 
-  renderResults({
+function computePayroll() {
+  const profile = el.profile.value;
+  const resident = el.residencyYear.value;
+  const fixedParts = {
+    base: getBaseSalary(profile, resident),
+    training: getTrainingSupplement(profile, resident),
+    island: getIslandAllowance(el.island.value)
+  };
+  const fixed = getFixedMonthlySalary(profile, resident, el.island.value);
+  const guardTotals = getGuardsTotal(sortedGuards(), resident);
+  const vacationProration = getVacationProrationAmount();
+  const extraPay = getExtraPay(profile, resident, el.includeExtra.checked);
+  const gross = getGrossTotal(fixed, guardTotals.total, vacationProration, extraPay);
+  const socialSecurityRate = safePositive(toNumber(el.socialSecurity.value));
+  const socialSecurity = getSocialSecurityAmount(gross, socialSecurityRate);
+  const irpfRate = safePositive(toNumber(el.irpf.value));
+  const irpf = getIrpfAmount(gross, irpfRate);
+  const net = getNetTotal(gross, socialSecurity, irpf);
+
+  return {
+    fixedParts,
     fixed,
     guards: guardTotals,
     vacationProration,
     extraPay,
     gross,
     socialSecurity,
+    socialSecurityRate,
     irpf,
     irpfRate,
     net
-  });
+  };
 }
 
-function calculateGuardTotals() {
+function getBaseSalary(profile, residencyYear) {
+  return salaryTables[profile]?.baseSalary?.[residencyYear] || 0;
+}
+
+function getTrainingSupplement(profile, residencyYear) {
+  return salaryTables[profile]?.trainingComplement?.[residencyYear] || 0;
+}
+
+function getIslandAllowance(island) {
+  return islandAllowance[island] || 0;
+}
+
+function getFixedMonthlySalary(profile, residencyYear, island) {
+  return getBaseSalary(profile, residencyYear) + getTrainingSupplement(profile, residencyYear) + getIslandAllowance(island);
+}
+
+function getExtraPay(profile, residencyYear, includeExtraPay) {
+  if (!includeExtraPay) return 0;
+  return extraPayRules.baseExtraAmount + getTrainingSupplement(profile, residencyYear);
+}
+
+function getGrossTotal(fixed, guards, vacationProration, extraPay) {
+  return fixed + guards + vacationProration + extraPay;
+}
+
+function getSocialSecurityAmount(gross, rate) {
+  return gross * rate / 100;
+}
+
+function getIrpfAmount(gross, rate) {
+  return gross * rate / 100;
+}
+
+function getNetTotal(gross, socialSecurity, irpf) {
+  return gross - socialSecurity - irpf;
+}
+
+function getGuardsTotal(guards, residencyYear) {
   const totals = {
     count: 0,
+    automaticGuardCount: 0,
+    normalGuardCount: 0,
+    fifthGuardCount: 0,
     weekdayHours: 0,
     holidayHours: 0,
     specialHours: 0,
@@ -694,11 +782,15 @@ function calculateGuardTotals() {
     total: 0
   };
 
-  sortedGuards().forEach((guard) => {
+  guards.forEach((guard) => {
     const hours = safePositive(guard.hours);
-    const calc = calculateGuardAmount(guard);
+    const guardIndex = getGuardIndex(guard.date);
+    const calc = getGuardAmount(guard, residencyYear, guardIndex);
     totals.count += 1;
     totals.total += calc.amount;
+    if (guardIndex) totals.automaticGuardCount += 1;
+    if (guardIndex && calc.isFifthRate) totals.fifthGuardCount += 1;
+    if (guardIndex && calc.isNormalRate) totals.normalGuardCount += 1;
 
     if (guard.dayType === "weekday") totals.weekdayHours += hours;
     if (guard.dayType === "holiday") totals.holidayHours += hours;
@@ -713,11 +805,33 @@ function calculateGuardTotals() {
   return totals;
 }
 
-function calculateGuardAmount(guard) {
+function getGuardIndex(dateKeyValue) {
+  let index = 0;
+  for (const guard of sortedGuards()) {
+    if (countsAsAutomaticGuard(guard)) index += 1;
+    if (guard.date === dateKeyValue) return countsAsAutomaticGuard(guard) ? index : 0;
+  }
+  return 0;
+}
+
+function countsAsAutomaticGuard(guard) {
+  if ((guard.paymentType || "guard") !== "guard") return false;
+  return guard.paymentOverride !== "manualAmount";
+}
+
+function getGuardRate(residencyYear, dayType, guardIndex, paymentType) {
+  const rates = guardRates.facultativo[residencyYear];
+  if (!rates || paymentType !== "guard") return 0;
+  if (dayType === "special") return rates.special;
+  const rateGroup = guardIndex >= 5 ? rates.fifthAndFollowing : rates.normal;
+  return rateGroup[dayType] || 0;
+}
+
+function getGuardAmount(guard, residencyYear, guardIndex) {
   const hours = safePositive(guard.hours);
-  const rates = currentRates();
   const canUseAutomaticRates = canUseRatesForGuard(guard);
-  const automaticRate = canUseAutomaticRates ? rates[guard.dayType] || 0 : 0;
+  const paymentType = guard.paymentType || "guard";
+  const automaticRate = canUseAutomaticRates ? getGuardRate(residencyYear, guard.dayType, guardIndex, paymentType) : 0;
   const partial = hours > 0 && hours < 14.5;
 
   if (guard.paymentOverride === "manualAmount") {
@@ -725,6 +839,8 @@ function calculateGuardAmount(guard) {
       amount: safePositive(toNumber(guard.manualTotalAmount)),
       rate: 0,
       rateLabel: "Manual",
+      isFifthRate: false,
+      isNormalRate: false,
       isManualOrOrdinary: true
     };
   }
@@ -735,6 +851,8 @@ function calculateGuardAmount(guard) {
       amount: hours * rate,
       rate,
       rateLabel: `${formatCurrency(rate)}/h`,
+      isFifthRate: false,
+      isNormalRate: false,
       isManualOrOrdinary: true
     };
   }
@@ -745,6 +863,8 @@ function calculateGuardAmount(guard) {
       amount: hours * rate,
       rate,
       rateLabel: rate > 0 ? `${formatCurrency(rate)}/h` : "Ordinaria",
+      isFifthRate: false,
+      isNormalRate: false,
       isManualOrOrdinary: true
     };
   }
@@ -754,6 +874,8 @@ function calculateGuardAmount(guard) {
       amount: safePositive(toNumber(guard.partialManualAmount)),
       rate: 0,
       rateLabel: "Manual",
+      isFifthRate: false,
+      isNormalRate: false,
       isManualOrOrdinary: true
     };
   }
@@ -762,20 +884,18 @@ function calculateGuardAmount(guard) {
     amount: hours * automaticRate,
     rate: automaticRate,
     rateLabel: canUseAutomaticRates ? `${formatCurrency(automaticRate)}/h` : "Tarifa manual",
+    isFifthRate: paymentType === "guard" && guard.dayType !== "special" && guardIndex >= 5,
+    isNormalRate: paymentType === "guard" && guard.dayType !== "special" && guardIndex > 0 && guardIndex < 5,
     isManualOrOrdinary: false
   };
 }
 
-function calculateVacationProration() {
+function getVacationProrationAmount() {
   if (!el.hasVacation.checked || !el.includeVacationProration.checked) return 0;
   if (el.prorationMode.value === "manual") return safePositive(toNumber(el.manualProration.value));
-
-  const rates = currentRates();
-  const hours = 17;
-  const weekday = safePositive(toNumber(el.usualWeekdayGuards.value)) * hours * rates.weekday;
-  const holiday = safePositive(toNumber(el.usualHolidayGuards.value)) * hours * rates.holiday;
-  const special = safePositive(toNumber(el.usualSpecialGuards.value)) * hours * rates.special;
-  return weekday + holiday + special;
+  const days = safePositive(toNumber(el.vacationDays.value));
+  const daysInMonth = new Date(toNumber(el.year.value), toNumber(el.month.value), 0).getDate();
+  return safePositive(toNumber(el.averageGuardAmount.value)) * days / daysInMonth;
 }
 
 function renderResults(result) {
@@ -787,6 +907,8 @@ function renderResults(result) {
     ["Fijo mensual", formatCurrency(result.fixed)],
     ["Guardias cobradas", formatCurrency(result.guards.total)],
     ["Guardias/turnos", String(result.guards.count)],
+    ["Guardias tramo normal", String(result.guards.normalGuardCount)],
+    ["Guardias 5.ª y sig.", String(result.guards.fifthGuardCount)],
     ["Horas laborables", formatHours(result.guards.weekdayHours)],
     ["Horas festivas", formatHours(result.guards.holidayHours)],
     ["Horas especiales", formatHours(result.guards.specialHours)]
@@ -801,7 +923,7 @@ function renderResults(result) {
 
   metrics.push(
     ["Bruto total", formatCurrency(result.gross), "total"],
-    ["Seguridad Social", `-${formatCurrency(result.socialSecurity)}`],
+    [`Seguridad Social ${formatPercent(result.socialSecurityRate)}`, `-${formatCurrency(result.socialSecurity)}`],
     [`IRPF aplicado ${formatPercent(result.irpfRate)}`, `-${formatCurrency(result.irpf)}`],
     ["Neto estimado", formatCurrency(result.net), "total"]
   );
@@ -815,6 +937,7 @@ function renderResults(result) {
   });
 
   el.summaryText.textContent = buildSummary(result);
+  renderPrintSummary(result);
 }
 
 function buildSummary(result) {
@@ -828,6 +951,76 @@ function buildSummary(result) {
     ? ` + ${result.guards.partialManualCount} turno${result.guards.partialManualCount === 1 ? " parcial" : "s parciales"}`
     : "";
   return `${resident} ${island} · nómina ${payroll} · guardias ${guards} · ${guardText}${partialText} · IRPF ${formatPercent(result.irpfRate)} · bruto estimado ${formatCurrency(result.gross)} · neto estimado ${formatCurrency(result.net)}.`;
+}
+
+function renderPrintSummary(result) {
+  const payroll = periodLabel(toNumber(el.year.value), toNumber(el.month.value));
+  const guardPeriod = periodLabel(getGuardPeriod().year, getGuardPeriod().month);
+  const generatedAt = new Intl.DateTimeFormat("es-ES", { dateStyle: "short", timeStyle: "short" }).format(new Date());
+  const profileLabel = salaryTables[el.profile.value].label;
+  const resident = el.residencyYear.value;
+  const devengos = [
+    ["Sueldo base", resident, result.fixedParts.base],
+    ["Complemento de formación", resident, result.fixedParts.training],
+    ["Plus de insularidad", el.island.value, result.fixedParts.island],
+    ["Guardias cobradas", `${result.guards.count} guardias/turnos`, result.guards.total],
+    ["Guardias tramo normal", `${result.guards.normalGuardCount}`, 0],
+    ["Guardias 5.ª y siguientes", `${result.guards.fifthGuardCount}`, 0],
+    ["Horas laborables", formatHours(result.guards.weekdayHours), 0],
+    ["Horas festivas", formatHours(result.guards.holidayHours), 0],
+    ["Horas especiales", formatHours(result.guards.specialHours), 0]
+  ];
+  if (result.guards.ordinaryManualAmount > 0) devengos.push(["Turnos manuales/ordinarios", formatHours(result.guards.ordinaryManualHours), result.guards.ordinaryManualAmount]);
+  if (result.vacationProration > 0) devengos.push(["Prorrateo vacaciones", `${formatInputNumber(toNumber(el.vacationDays.value))} días`, result.vacationProration]);
+  if (result.extraPay > 0) devengos.push(["Paga extra", "Base extra + formación", result.extraPay]);
+  devengos.push(["Total devengado", "Bruto total", result.gross]);
+
+  el.printSummary.innerHTML = `
+    <div class="print-header">
+      <div>
+        <h1>Resumen estimativo de nómina</h1>
+        <p>Residentes IB-Salut 2026</p>
+      </div>
+      <div class="print-meta">
+        <span>${generatedAt}</span>
+        <span>GuiYo (estimación orientativa, no vinculante)</span>
+      </div>
+    </div>
+
+    <h2>Datos del cálculo</h2>
+    <table>
+      <tbody>
+        <tr><th>Mes de nómina</th><td>${payroll}</td><th>Guardias cobradas</th><td>${guardPeriod}</td></tr>
+        <tr><th>Año residencia</th><td>${resident}</td><th>Perfil</th><td>${profileLabel}</td></tr>
+        <tr><th>Isla</th><td>${el.island.value}</td><th>Ámbito</th><td>${scopeLabels[el.scope.value]}</td></tr>
+        <tr><th>IRPF</th><td>${formatPercent(result.irpfRate)}</td><th>Seguridad Social</th><td>${formatPercent(result.socialSecurityRate)}</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Devengos</h2>
+    <table>
+      <thead><tr><th>Concepto</th><th>Detalle</th><th>Importe</th></tr></thead>
+      <tbody>
+        ${devengos.map(([concept, detail, amount]) => `<tr><td>${concept}</td><td>${detail}</td><td>${amount ? formatCurrency(amount) : ""}</td></tr>`).join("")}
+      </tbody>
+    </table>
+
+    <h2>Deducciones</h2>
+    <table>
+      <thead><tr><th>Concepto</th><th>Base o porcentaje</th><th>Importe</th></tr></thead>
+      <tbody>
+        <tr><td>Seguridad Social</td><td>${formatPercent(result.socialSecurityRate)}</td><td>${formatCurrency(result.socialSecurity)}</td></tr>
+        <tr><td>IRPF</td><td>${formatPercent(result.irpfRate)}</td><td>${formatCurrency(result.irpf)}</td></tr>
+        <tr><td>Total deducciones</td><td></td><td>${formatCurrency(result.socialSecurity + result.irpf)}</td></tr>
+      </tbody>
+    </table>
+
+    <div class="print-net">
+      <span>Neto estimado / líquido estimado a percibir</span>
+      <strong>${formatCurrency(result.net)}</strong>
+    </div>
+    <p class="print-legal">Documento orientativo y no vinculante. No sustituye la nómina oficial ni tiene validez administrativa.</p>
+  `;
 }
 
 async function copySummary() {
@@ -846,7 +1039,9 @@ function validateInputs() {
     [el.irpf, "IRPF"],
     [el.socialSecurity, "Seguridad Social"],
     [el.usualGuards, "Guardias habituales"],
-    [el.manualProration, "Prorrateo manual"]
+    [el.manualProration, "Prorrateo manual"],
+    [el.vacationDays, "Días vacaciones"],
+    [el.averageGuardAmount, "Media guardias"]
   ];
 
   for (const [field, label] of numericFields) {
@@ -880,12 +1075,6 @@ function getSoftWarning() {
     }
   }
   return "";
-}
-
-function currentRates() {
-  const profile = el.profile.value;
-  const resident = el.residencyYear.value;
-  return guardRates[profile]?.[resident] || { weekday: 0, holiday: 0, special: 0 };
 }
 
 function canUseRatesForGuard(guard) {

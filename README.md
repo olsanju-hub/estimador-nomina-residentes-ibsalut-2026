@@ -23,9 +23,9 @@ Solo personal sanitario en formación/residentes del IB-Salut:
 - Calendario laboral Illes Balears 2026: https://www.illesbalears.cat/sites/calendarilaboral/es/aao_2026/
 - Días especiales de atención continuada localizados en la tabla oficial IB-Salut 2025: 24, 25 y 31 de diciembre y 1 de enero.
 
-Fecha de actualización: 14 de mayo de 2026.
+Fecha de actualización: 15 de mayo de 2026.
 
-No se ha localizado una tabla IB-Salut 2026 completa publicada para sustituir la tabla oficial 2025. La hora ordinaria para turnos parciales no se calcula con tarifa inventada: queda como campo manual editable.
+No se ha localizado una tabla IB-Salut 2026 completa publicada para sustituir la tabla oficial 2025. Las cuantías 2026 se mantienen como derivación documentada desde la tabla oficial 2025 y la actualización retributiva oficial usada en los datos internos. La hora ordinaria para turnos parciales no se calcula con tarifa inventada: queda como campo manual editable.
 
 ## Criterio de cálculo
 
@@ -33,6 +33,9 @@ No se ha localizado una tabla IB-Salut 2026 completa publicada para sustituir la
 - Por defecto, la nómina incluye las guardias realizadas el mes anterior.
 - Ejemplo: nómina de junio 2026 = fijo de junio + guardias de mayo 2026.
 - La paga extra depende del mes de nómina: junio y diciembre.
+- Las guardias 5.ª y siguientes aplican el tramo oficial de personal facultativo en formación si el día no es especial.
+- En días especiales se prioriza la tarifa especial; la tabla no aclara una combinación separada con el tramo 5.ª.
+- El resumen final puede imprimirse o guardarse como PDF con `Imprimir / PDF`; es orientativo y no oficial.
 
 ## Datos
 
