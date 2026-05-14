@@ -8,7 +8,10 @@ Solo personal sanitario en formación/residentes del IB-Salut:
 
 - MIR/FIR/BIR/QIR/PIR y otros facultativos en formación que usen la misma tabla.
 - EIR queda desactivado hasta confirmar datos oficiales 2026 específicos.
+- Islas disponibles: Mallorca, Menorca e Ibiza.
+- Formentera no se ofrece porque no hay residentes en Formentera.
 - No incluye adjuntos, estatutarios fijos, eventuales no residentes ni otras categorías.
+- El cálculo no incluye trienios.
 
 ## Fuentes oficiales consultadas
 
@@ -23,6 +26,13 @@ Solo personal sanitario en formación/residentes del IB-Salut:
 Fecha de actualización: 14 de mayo de 2026.
 
 No se ha localizado una tabla IB-Salut 2026 completa publicada para sustituir la tabla oficial 2025. La hora ordinaria para turnos parciales no se calcula con tarifa inventada: queda como campo manual editable.
+
+## Criterio de cálculo
+
+- El usuario selecciona el mes de nómina.
+- Por defecto, la nómina incluye las guardias realizadas el mes anterior.
+- Ejemplo: nómina de junio 2026 = fijo de junio + guardias de mayo 2026.
+- La paga extra depende del mes de nómina: junio y diciembre.
 
 ## Datos
 

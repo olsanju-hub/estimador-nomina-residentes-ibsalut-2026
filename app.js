@@ -30,8 +30,7 @@ const salaryTables = {
 const islandAllowance = {
   Mallorca: 205.30,
   Menorca: 410.60,
-  Ibiza: 410.60,
-  Formentera: 615.90
+  Ibiza: 410.60
 };
 
 const guardRates = {
@@ -51,6 +50,9 @@ const extraPayRules = {
 };
 
 const specialDays = {
+  "2025-12-24": "Especial IB-Salut",
+  "2025-12-25": "Navidad",
+  "2025-12-31": "Revisar 31/12",
   "2026-01-01": "Año Nuevo",
   "2026-12-24": "Especial IB-Salut",
   "2026-12-25": "Navidad",
@@ -58,6 +60,10 @@ const specialDays = {
 };
 
 const publicHolidays = {
+  "2025-12-06": "Constitución",
+  "2025-12-08": "Inmaculada",
+  "2025-12-25": "Navidad",
+  "2025-12-26": "Segunda fiesta de Navidad",
   "2026-01-01": "Año Nuevo",
   "2026-01-06": "Epifanía",
   "2026-03-02": "Día siguiente Illes Balears",
@@ -110,16 +116,11 @@ const scopeLabels = {
   manual: "Manual"
 };
 
-const paymentLabels = {
-  guard: "Hora de guardia",
-  ordinary: "Hora ordinaria",
-  manual: "Manual"
-};
-
 const state = {
   guards: new Map(),
   extraTouched: false,
-  irpfTouched: false
+  irpfTouched: false,
+  currentStep: "data"
 };
 
 const el = {
@@ -130,9 +131,18 @@ const el = {
   children: document.querySelector("#children"),
   year: document.querySelector("#year"),
   month: document.querySelector("#month"),
+  guardYear: document.querySelector("#guardYear"),
+  guardMonth: document.querySelector("#guardMonth"),
+  customGuardMonth: document.querySelector("#customGuardMonth"),
+  guardMonthControls: document.querySelector("#guardMonthControls"),
+  use2026RatesWrap: document.querySelector("#use2026RatesWrap"),
+  use2026RatesForPastGuards: document.querySelector("#use2026RatesForPastGuards"),
+  payrollMonthLabel: document.querySelector("#payrollMonthLabel"),
+  paidGuardsLabel: document.querySelector("#paidGuardsLabel"),
+  guardPayrollLabel: document.querySelector("#guardPayrollLabel"),
+  guardPaidLabel: document.querySelector("#guardPaidLabel"),
   includeExtra: document.querySelector("#includeExtra"),
   irpf: document.querySelector("#irpf"),
-  triennials: document.querySelector("#triennials"),
   socialSecurity: document.querySelector("#socialSecurity"),
   usualGuards: document.querySelector("#usualGuards"),
   scope: document.querySelector("#scope"),
@@ -156,7 +166,9 @@ const el = {
   copyBtn: document.querySelector("#copyBtn"),
   resetBtn: document.querySelector("#resetBtn"),
   calculateBtn: document.querySelector("#calculateBtn"),
-  suggestIrpfBtn: document.querySelector("#suggestIrpfBtn")
+  suggestIrpfBtn: document.querySelector("#suggestIrpfBtn"),
+  stepTabs: document.querySelectorAll("[data-go-step]"),
+  stepPanels: document.querySelectorAll("[data-step]")
 };
 
 function init() {
@@ -166,10 +178,17 @@ function init() {
     option.textContent = name.charAt(0).toUpperCase() + name.slice(1);
     if (index === 4) option.selected = true;
     el.month.append(option);
+
+    const guardOption = option.cloneNode(true);
+    guardOption.selected = false;
+    el.guardMonth.append(guardOption);
   });
 
   wireEvents();
+  syncGuardMonth(true);
   syncExtraPay(true);
+  updateMonthLabels();
+  setStep("data");
   renderCalendar();
   calculate();
 }
@@ -193,6 +212,9 @@ function wireEvents() {
   el.calculateBtn.addEventListener("click", calculate);
   el.resetBtn.addEventListener("click", resetAll);
   el.copyBtn.addEventListener("click", copySummary);
+  el.stepTabs.forEach((button) => {
+    button.addEventListener("click", () => setStep(button.dataset.goStep));
+  });
 }
 
 function handleInput(event) {
@@ -235,7 +257,21 @@ function handleChange(event) {
   const target = event.target;
 
   if (target.id === "month" || target.id === "year") {
+    syncGuardMonth(false);
     syncExtraPay(false);
+    updateMonthLabels();
+    renderCalendar();
+  }
+
+  if (target.id === "customGuardMonth") {
+    el.guardMonthControls.classList.toggle("hidden", !target.checked);
+    if (!target.checked) syncGuardMonth(true);
+    updateMonthLabels();
+    renderCalendar();
+  }
+
+  if (target.id === "guardMonth" || target.id === "guardYear" || target.id === "use2026RatesForPastGuards") {
+    updateMonthLabels();
     renderCalendar();
   }
 
@@ -300,13 +336,27 @@ function resetAll() {
   el.children.value = "2";
   el.year.value = "2026";
   el.month.value = "5";
+  el.customGuardMonth.checked = false;
+  el.guardMonthControls.classList.add("hidden");
+  el.use2026RatesForPastGuards.checked = false;
   el.scope.value = "hospital";
   el.irpf.value = "17";
   el.socialSecurity.value = String(socialSecurityDefaults.rate);
   el.vacationOptions.classList.add("hidden");
+  syncGuardMonth(true);
   syncExtraPay(true);
+  updateMonthLabels();
   renderCalendar();
   calculate();
+}
+
+function syncGuardMonth(force) {
+  if (!force && el.customGuardMonth.checked) return;
+  const payrollYear = toNumber(el.year.value);
+  const payrollMonth = toNumber(el.month.value);
+  const previous = previousMonth(payrollYear, payrollMonth);
+  el.guardYear.value = String(previous.year);
+  el.guardMonth.value = String(previous.month);
 }
 
 function syncExtraPay(force) {
@@ -317,14 +367,14 @@ function syncExtraPay(force) {
 }
 
 function renderCalendar() {
-  const year = toNumber(el.year.value);
-  const month = toNumber(el.month.value);
+  const year = getGuardPeriod().year;
+  const month = getGuardPeriod().month;
   const daysInMonth = new Date(year, month, 0).getDate();
   const firstDay = new Date(year, month - 1, 1);
   const startOffset = (firstDay.getDay() + 6) % 7;
   const validKeys = new Set();
 
-  el.calendarLabel.textContent = `${monthNames[month - 1]} ${year}`;
+  el.calendarLabel.textContent = `Guardias realizadas en ${periodLabel(year, month)}`;
   updateCalendarHint();
   el.calendar.innerHTML = "";
 
@@ -609,8 +659,7 @@ function calculate() {
   const base = table.baseSalary[resident];
   const training = table.trainingComplement[resident];
   const island = islandAllowance[el.island.value];
-  const triennials = safePositive(toNumber(el.triennials.value));
-  const fixed = base + training + island + triennials;
+  const fixed = base + training + island;
   const guardTotals = calculateGuardTotals();
   const vacationProration = calculateVacationProration();
   const extraPay = el.includeExtra.checked ? extraPayRules.baseExtraAmount + training : 0;
@@ -667,7 +716,8 @@ function calculateGuardTotals() {
 function calculateGuardAmount(guard) {
   const hours = safePositive(guard.hours);
   const rates = currentRates();
-  const automaticRate = rates[guard.dayType] || 0;
+  const canUseAutomaticRates = canUseRatesForGuard(guard);
+  const automaticRate = canUseAutomaticRates ? rates[guard.dayType] || 0 : 0;
   const partial = hours > 0 && hours < 14.5;
 
   if (guard.paymentOverride === "manualAmount") {
@@ -711,7 +761,7 @@ function calculateGuardAmount(guard) {
   return {
     amount: hours * automaticRate,
     rate: automaticRate,
-    rateLabel: `${formatCurrency(automaticRate)}/h`,
+    rateLabel: canUseAutomaticRates ? `${formatCurrency(automaticRate)}/h` : "Tarifa manual",
     isManualOrOrdinary: false
   };
 }
@@ -732,8 +782,10 @@ function renderResults(result) {
   el.netTotal.textContent = formatCurrency(result.net);
 
   const metrics = [
+    ["Mes nómina", periodLabel(toNumber(el.year.value), toNumber(el.month.value))],
+    ["Mes guardias", periodLabel(getGuardPeriod().year, getGuardPeriod().month)],
     ["Fijo mensual", formatCurrency(result.fixed)],
-    ["Guardias reales", formatCurrency(result.guards.total)],
+    ["Guardias cobradas", formatCurrency(result.guards.total)],
     ["Guardias/turnos", String(result.guards.count)],
     ["Horas laborables", formatHours(result.guards.weekdayHours)],
     ["Horas festivas", formatHours(result.guards.holidayHours)],
@@ -768,14 +820,14 @@ function renderResults(result) {
 function buildSummary(result) {
   const resident = el.residencyYear.value;
   const island = el.island.value;
-  const month = monthNames[toNumber(el.month.value) - 1];
-  const year = el.year.value;
+  const payroll = periodLabel(toNumber(el.year.value), toNumber(el.month.value));
+  const guards = periodLabel(getGuardPeriod().year, getGuardPeriod().month);
   const guardCount = result.guards.count - result.guards.partialManualCount;
   const guardText = guardCount === 1 ? "1 guardia" : `${Math.max(0, guardCount)} guardias`;
   const partialText = result.guards.partialManualCount > 0
     ? ` + ${result.guards.partialManualCount} turno${result.guards.partialManualCount === 1 ? " parcial" : "s parciales"}`
     : "";
-  return `${resident} ${island} · ${month} ${year} · ${guardText}${partialText} · IRPF ${formatPercent(result.irpfRate)} · bruto estimado ${formatCurrency(result.gross)} · neto estimado ${formatCurrency(result.net)}.`;
+  return `${resident} ${island} · nómina ${payroll} · guardias ${guards} · ${guardText}${partialText} · IRPF ${formatPercent(result.irpfRate)} · bruto estimado ${formatCurrency(result.gross)} · neto estimado ${formatCurrency(result.net)}.`;
 }
 
 async function copySummary() {
@@ -793,7 +845,6 @@ function validateInputs() {
   const numericFields = [
     [el.irpf, "IRPF"],
     [el.socialSecurity, "Seguridad Social"],
-    [el.triennials, "Trienios"],
     [el.usualGuards, "Guardias habituales"],
     [el.manualProration, "Prorrateo manual"]
   ];
@@ -815,6 +866,10 @@ function validateInputs() {
 }
 
 function getSoftWarning() {
+  const guardPeriod = getGuardPeriod();
+  if (guardPeriod.year !== 2026 && !el.use2026RatesForPastGuards.checked) {
+    return "Tarifas 2025 no cargadas. Usa importes manuales o confirma tarifas 2026.";
+  }
   for (const guard of state.guards.values()) {
     if (isDec31(guard.date) && !guard.dec31Mode) return "31/12: confirma horas y tarifa.";
     if (guard.hours > 0 && guard.hours < 14.5 && guard.paymentType === "ordinary" && !toNumber(guard.ordinaryHourlyRate)) {
@@ -831,6 +886,11 @@ function currentRates() {
   const profile = el.profile.value;
   const resident = el.residencyYear.value;
   return guardRates[profile]?.[resident] || { weekday: 0, holiday: 0, special: 0 };
+}
+
+function canUseRatesForGuard(guard) {
+  const year = parseDateKey(guard.date).getFullYear();
+  return year === 2026 || el.use2026RatesForPastGuards.checked || guard.paymentOverride !== "auto";
 }
 
 function defaultHoursForGuard(key, scope) {
@@ -867,6 +927,43 @@ function timeToMinutes(value) {
 function updateCalendarHint() {
   const text = el.scope.value === "primary" ? "CS: 14,5 h L-J; 17 h V" : el.scope.value === "hospital" ? "Hospital: 17 h laborable" : "Manual editable";
   el.calendarHint.textContent = text;
+}
+
+function updateMonthLabels() {
+  const payrollYear = toNumber(el.year.value);
+  const payrollMonth = toNumber(el.month.value);
+  const guardPeriod = getGuardPeriod();
+  const payrollText = periodLabel(payrollYear, payrollMonth);
+  const guardText = periodLabel(guardPeriod.year, guardPeriod.month);
+  el.payrollMonthLabel.textContent = payrollText;
+  el.paidGuardsLabel.textContent = guardText;
+  el.guardPayrollLabel.textContent = payrollText;
+  el.guardPaidLabel.textContent = guardText;
+  el.use2026RatesWrap.classList.toggle("hidden", guardPeriod.year === 2026);
+}
+
+function getGuardPeriod() {
+  return {
+    year: toNumber(el.guardYear.value),
+    month: toNumber(el.guardMonth.value)
+  };
+}
+
+function previousMonth(year, month) {
+  if (month === 1) return { year: year - 1, month: 12 };
+  return { year, month: month - 1 };
+}
+
+function periodLabel(year, month) {
+  return `${monthNames[month - 1]} ${year}`;
+}
+
+function setStep(step) {
+  state.currentStep = step;
+  el.stepPanels.forEach((panel) => panel.classList.toggle("active", panel.dataset.step === step));
+  document.querySelectorAll(".step-tab").forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.goStep === step);
+  });
 }
 
 function shortType(type) {
