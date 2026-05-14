@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Estimador orientativo de nómina mensual para residentes del IB-Salut en 2026.">
+    <title>Estimador nómina residentes IB-Salut 2026</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1>Estimador nómina residentes IB-Salut 2026</h1>
+          <p>Solo personal sanitario en formación.</p>
+        </div>
+      </header>
+
+      <div class="layout">
+        <section class="panel input-panel" aria-label="Datos de cálculo">
+          <form id="payrollForm" autocomplete="off">
+            <div class="section-head">
+              <h2>Datos</h2>
+              <button type="button" id="resetBtn" class="ghost">Restablecer</button>
+            </div>
+
+            <div class="grid two">
+              <label>
+                Año residencia
+                <select id="residencyYear">
+                  <option value="R1">R1</option>
+                  <option value="R2">R2</option>
+                  <option value="R3">R3</option>
+                  <option value="R4" selected>R4</option>
+                  <option value="R5">R5</option>
+                </select>
+              </label>
+
+              <label>
+                Perfil
+                <select id="profile">
+                  <option value="facultativo" selected>Facultativo en formación</option>
+                  <option value="eir" disabled>EIR pendiente de datos oficiales</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="grid two">
+              <label>
+                Isla
+                <select id="island">
+                  <option value="Mallorca">Mallorca</option>
+                  <option value="Menorca">Menorca</option>
+                  <option value="Ibiza" selected>Ibiza</option>
+                  <option value="Formentera">Formentera</option>
+                </select>
+              </label>
+
+              <label>
+                Hijos a cargo
+                <select id="children">
+                  <option value="0">0</option>
+                  <option value="1">1</option>
+                  <option value="2" selected>2</option>
+                  <option value="3">3 o más</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="grid two">
+              <label>
+                Año
+                <input id="year" type="number" min="2026" max="2028" value="2026">
+              </label>
+
+              <label>
+                Mes
+                <select id="month"></select>
+              </label>
+            </div>
+
+            <div class="compact-row">
+              <label class="switch">
+                <input id="includeExtra" type="checkbox">
+                <span>Incluir paga extra</span>
+              </label>
+              <button type="button" id="calculateBtn" class="primary small">Calcular</button>
+            </div>
+
+            <div class="grid two">
+              <label>
+                IRPF aplicado (%)
+                <input id="irpf" type="number" min="0" max="60" step="0.1" value="17" required>
+              </label>
+              <label>
+                Trienios previos (€)
+                <input id="triennials" type="number" min="0" step="0.01" value="0">
+              </label>
+            </div>
+
+            <div class="compact-row">
+              <button type="button" id="suggestIrpfBtn" class="ghost small">Usar IRPF sugerido</button>
+              <details class="advanced">
+                <summary>Avanzado</summary>
+                <label>
+                  Seguridad Social (%)
+                  <input id="socialSecurity" type="number" min="0" max="20" step="0.1" value="6.4">
+                </label>
+              </details>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="section-head">
+              <h2>Guardias</h2>
+              <label class="mini-field">
+                Habituales/mes
+                <input id="usualGuards" type="number" min="0" max="15" step="1" value="4">
+              </label>
+            </div>
+
+            <div class="calendar-card">
+              <div class="calendar-title">
+                <strong id="calendarLabel"></strong>
+                <span>17 h por defecto</span>
+              </div>
+              <div class="weekdays" aria-hidden="true">
+                <span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span>
+              </div>
+              <div id="calendar" class="calendar" aria-label="Calendario de guardias"></div>
+            </div>
+
+            <div id="guardList" class="guard-list" aria-live="polite"></div>
+
+            <div class="vacation-card">
+              <label class="switch">
+                <input id="hasVacation" type="checkbox">
+                <span>Este mes tengo vacaciones</span>
+              </label>
+              <div id="vacationOptions" class="vacation-options hidden">
+                <label class="switch">
+                  <input id="includeVacationProration" type="checkbox">
+                  <span>Añadir prorrateo</span>
+                </label>
+                <div class="grid two">
+                  <label>
+                    Modo
+                    <select id="prorationMode">
+                      <option value="manual">Importe manual</option>
+                      <option value="estimate">Estimar por media</option>
+                    </select>
+                  </label>
+                  <label>
+                    Importe manual (€)
+                    <input id="manualProration" type="number" min="0" step="0.01" value="0">
+                  </label>
+                </div>
+                <div class="grid three">
+                  <label>
+                    Laborables
+                    <input id="usualWeekdayGuards" type="number" min="0" max="15" step="1" value="2">
+                  </label>
+                  <label>
+                    Festivas
+                    <input id="usualHolidayGuards" type="number" min="0" max="15" step="1" value="2">
+                  </label>
+                  <label>
+                    Especiales
+                    <input id="usualSpecialGuards" type="number" min="0" max="15" step="1" value="0">
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <p id="warning" class="warning hidden" role="alert"></p>
+          </form>
+        </section>
+
+        <aside class="results-panel" aria-label="Resultado estimado">
+          <section class="result-hero">
+            <span>Neto estimado</span>
+            <strong id="netTotal">0,00 €</strong>
+          </section>
+
+          <section class="panel">
+            <div class="section-head">
+              <h2>Resultado</h2>
+              <button type="button" id="copyBtn" class="primary small">Copiar resumen</button>
+            </div>
+            <div id="resultsGrid" class="results-grid"></div>
+            <div class="summary-box" id="summaryText"></div>
+          </section>
+        </aside>
+      </div>
+    </main>
+
+    <footer>GuiYo (estimación orientativa, no vinculante)</footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>
