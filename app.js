@@ -448,12 +448,16 @@ function renderCalendar() {
     const key = dateKey(year, month, day);
     validKeys.add(key);
     const type = classifyDate(key);
+    const visualType = getCalendarVisualType(key);
+    const accessibleType = getCalendarAccessibleType(key);
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `day ${type} ${isDec31(key) ? "review" : ""}`;
+    button.className = `day ${type} ${visualType} ${isDec31(key) ? "review" : ""}`;
     if (state.guards.has(key)) button.classList.add("selected");
-    button.innerHTML = `<span>${day}</span><span class="badge">${isDec31(key) ? "REV" : shortType(type)}</span>`;
+    button.innerHTML = `<span class="day-number">${day}</span><span class="day-marker" aria-hidden="true"></span>`;
     button.setAttribute("aria-pressed", state.guards.has(key) ? "true" : "false");
+    button.setAttribute("aria-label", `${day} de ${periodLabel(year, month)}. ${accessibleType}. ${state.guards.has(key) ? "Guardia seleccionada" : "Sin guardia seleccionada"}.`);
+    button.title = accessibleType;
     button.addEventListener("click", () => toggleGuard(key));
     el.calendar.append(button);
   }
@@ -1121,6 +1125,26 @@ function classifyDate(key) {
   return "weekday";
 }
 
+function getCalendarVisualType(key) {
+  if (specialDays[key]) return "special-day";
+  const date = parseDateKey(key);
+  const weekday = date.getDay();
+  if (publicHolidays[key] && weekday !== 0 && weekday !== 6) return "official-holiday";
+  if (weekday === 6) return "saturday";
+  if (weekday === 0) return "sunday";
+  return "workday";
+}
+
+function getCalendarAccessibleType(key) {
+  if (specialDays[key]) return `Día especial: ${specialDays[key]}`;
+  const date = parseDateKey(key);
+  const weekday = date.getDay();
+  if (publicHolidays[key] && weekday !== 0 && weekday !== 6) return `Festivo oficial: ${publicHolidays[key]}`;
+  if (weekday === 6) return publicHolidays[key] ? `Sábado y festivo oficial: ${publicHolidays[key]}` : "Sábado";
+  if (weekday === 0) return publicHolidays[key] ? `Domingo y festivo oficial: ${publicHolidays[key]}` : "Domingo";
+  return "Laborable";
+}
+
 function calculateScheduleHours(start, end) {
   if (!start || !end) return null;
   const startMinutes = timeToMinutes(start);
@@ -1174,12 +1198,6 @@ function setStep(step) {
   document.querySelectorAll(".step-tab").forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.goStep === step);
   });
-}
-
-function shortType(type) {
-  if (type === "special") return "ESP";
-  if (type === "holiday") return "FES";
-  return "";
 }
 
 function sortedGuards() {
