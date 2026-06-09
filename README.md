@@ -15,17 +15,16 @@ Solo personal sanitario en formación/residentes del IB-Salut:
 
 ## Fuentes oficiales consultadas
 
-- IB-Salut, tablas salariales oficiales actualizadas a 2025: https://www.ibsalut.es/es/profesionales/recursos-humanos/tablas-salariales
-- PDF oficial IB-Salut 2025: https://www.ibsalut.es/docs/rrhh/normativa/instrucciones%20y%20circulares/es/2025%20Tabla%20salarial%20personal%20estatutario%20CAST.pdf
-- BOIB núm. 010, 20/01/2026, acuerdo de insularidad para personal estatutario IB-Salut: https://www.caib.es/eboibfront/es/2026/12221/710965/acuerdo-del-consejo-de-gobierno-de-16-de-enero-de-
-- CAIB, subida salarial 2026 del 1,5% para empleados públicos: https://www.caib.es/pidip2front/ficha_convocatoria.xhtml?lang=es&urlSemantica=consell-de-governaprobada-la-subida-salarial-del-15--para-los-empleados-publicos-de-baleares
-- BOE, Real Decreto-ley 14/2025 sobre retribuciones del sector público: https://www.boe.es/diario_boe/txt.php?id=BOE-A-2025-24445
+- `Tablas retributivas_2026_ESP.pdf`, incluido en la raiz del repositorio.
+- Fecha de las tablas usadas: 01-01-2026.
+- Tabla IV: complemento de atencion continuada.
+- Tabla VI: personal en formacion especializada, interno residente.
+- Tabla VIII: indemnizacion por residencia.
 - Calendario laboral Illes Balears 2026: https://www.illesbalears.cat/sites/calendarilaboral/es/aao_2026/
-- Días especiales de atención continuada localizados en la tabla oficial IB-Salut 2025: 24, 25 y 31 de diciembre y 1 de enero.
 
-Fecha de actualización: 15 de mayo de 2026.
+Fecha de actualizacion: 9 de junio de 2026.
 
-No se ha localizado una tabla IB-Salut 2026 completa publicada para sustituir la tabla oficial 2025. Las cuantías 2026 se mantienen como derivación documentada desde la tabla oficial 2025 y la actualización retributiva oficial usada en los datos internos. La hora ordinaria para turnos parciales no se calcula con tarifa inventada: queda como campo manual editable.
+La app usa datos 2026 oficiales del PDF para sueldo base, complemento de formacion, paga extraordinaria, guardias de residentes facultativos e indemnizacion por residencia. La hora ordinaria para turnos parciales no se calcula con tarifa inventada: queda como campo manual editable.
 
 ## Criterio de cálculo
 
@@ -33,8 +32,9 @@ No se ha localizado una tabla IB-Salut 2026 completa publicada para sustituir la
 - Por defecto, la nómina incluye las guardias realizadas el mes anterior.
 - Ejemplo: nómina de junio 2026 = fijo de junio + guardias de mayo 2026.
 - La paga extra depende del mes de nómina: junio y diciembre.
+- La paga extra usa el importe especifico de la Tabla VI para cada año de residencia.
 - Las guardias 5.ª y siguientes aplican el tramo oficial de personal facultativo en formación si el día no es especial.
-- En días especiales se prioriza la tarifa especial; la tabla no aclara una combinación separada con el tramo 5.ª.
+- En días especiales se prioriza la tarifa especial de la Tabla IV sobre tarifa normal y sobre tarifa de 5.ª guardia y siguientes; la tabla no indica una combinacion separada.
 - El resumen final puede imprimirse o guardarse como PDF con `Imprimir / PDF`; es orientativo y no oficial.
 - Incluye icono local, favicon y manifest PWA sin logos oficiales.
 
@@ -49,8 +49,6 @@ Los datos editables están al inicio de `app.js`:
 - `specialDays`
 - `irpfSuggestions`
 - `socialSecurityDefaults`
-
-Si IB-Salut publica una tabla salarial completa 2026, actualizar esas constantes y mantener las fuentes en este README.
 
 La logística de guardias se configura en `defaultHoursForGuard`: hospital, centro de salud y modo manual. El 31 de diciembre se fuerza a revisión por posible variabilidad de horas/tarifa.
 

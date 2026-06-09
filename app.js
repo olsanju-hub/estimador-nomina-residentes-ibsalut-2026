@@ -4,20 +4,41 @@ const salaryTables = {
   facultativo: {
     enabled: true,
     label: "Facultativo en formación",
-    source: "IB-Salut tabla oficial 2025; importes 2026 revisables cuando se publique tabla completa.",
+    source: "Tablas retributivas_2026_ESP.pdf, Tabla VI (01-01-2026).",
     baseSalary: {
-      R1: 1366.74,
-      R2: 1366.74,
-      R3: 1366.74,
-      R4: 1366.74,
-      R5: 1366.74
+      R1: 1387.24,
+      R2: 1387.24,
+      R3: 1387.24,
+      R4: 1387.24,
+      R5: 1387.24
     },
     trainingComplement: {
-      R1: 136.67,
-      R2: 273.35,
-      R3: 410.02,
-      R4: 546.69,
-      R5: 683.37
+      R1: 138.72,
+      R2: 277.45,
+      R3: 416.17,
+      R4: 554.90,
+      R5: 693.62
+    },
+    monthlyBaseTotal: {
+      R1: 1525.96,
+      R2: 1664.69,
+      R3: 1803.41,
+      R4: 1942.14,
+      R5: 2080.86
+    },
+    extraPay: {
+      R1: 994.77,
+      R2: 1133.50,
+      R3: 1272.22,
+      R4: 1410.95,
+      R5: 1549.67
+    },
+    annualTotal: {
+      R1: 20301.12,
+      R2: 22243.25,
+      R3: 24185.39,
+      R4: 26127.52,
+      R5: 28069.66
     }
   },
   eir: {
@@ -28,52 +49,51 @@ const salaryTables = {
 };
 
 const islandAllowance = {
-  Mallorca: 205.30,
-  Menorca: 410.60,
-  Ibiza: 410.60
+  Mallorca: 147.09,
+  Menorca: 226.72,
+  Ibiza: 226.72
 };
 
 const guardRates = {
-  facultativo: {
+  facultyResident: {
     R1: {
-      normal: { weekday: 19.00, holiday: 20.90 },
-      fifthAndFollowing: { weekday: 23.76, holiday: 26.12 },
-      special: 41.80
+      normal: { weekday: 19.29, holiday: 21.21 },
+      fifthAndFollowing: { weekday: 24.12, holiday: 26.51 },
+      special: 42.43
     },
     R2: {
-      normal: { weekday: 20.76, holiday: 22.84 },
-      fifthAndFollowing: { weekday: 25.95, holiday: 28.56 },
-      special: 45.67
+      normal: { weekday: 21.07, holiday: 23.18 },
+      fifthAndFollowing: { weekday: 26.34, holiday: 28.99 },
+      special: 46.36
     },
     R3: {
-      normal: { weekday: 23.14, holiday: 25.46 },
-      fifthAndFollowing: { weekday: 28.94, holiday: 31.83 },
-      special: 50.91
+      normal: { weekday: 23.49, holiday: 25.84 },
+      fifthAndFollowing: { weekday: 29.37, holiday: 32.31 },
+      special: 51.67
     },
     R4: {
-      normal: { weekday: 25.52, holiday: 28.06 },
-      fifthAndFollowing: { weekday: 31.90, holiday: 35.08 },
-      special: 56.15
+      normal: { weekday: 25.90, holiday: 28.48 },
+      fifthAndFollowing: { weekday: 32.38, holiday: 35.61 },
+      special: 56.99
     },
     R5: {
-      normal: { weekday: 25.52, holiday: 28.06 },
-      fifthAndFollowing: { weekday: 31.90, holiday: 35.08 },
-      special: 56.15
+      normal: { weekday: 25.90, holiday: 28.48 },
+      fifthAndFollowing: { weekday: 32.38, holiday: 35.61 },
+      special: 56.99
     }
   }
 };
 
 const payrollDataMeta = {
-  baseYear: 2025,
-  targetYear: 2026,
-  updateFactor: 1.025,
+  source: "Tablas retributivas_2026_ESP.pdf",
+  tableDate: "01-01-2026",
+  tables: ["IV", "VI", "VIII"],
   fifthGuardRule: "Las guardias 5.ª y siguientes usan el tramo oficial si el día no es especial. En días especiales se prioriza la tarifa especial."
 };
 
 const extraPayRules = {
   months: [6, 12],
-  baseExtraAmount: 822.83,
-  includeTrainingComplement: true
+  source: "Tabla VI: paga extraordinaria por año de residencia."
 };
 
 const specialDays = {
@@ -748,7 +768,7 @@ function getFixedMonthlySalary(profile, residencyYear, island) {
 
 function getExtraPay(profile, residencyYear, includeExtraPay) {
   if (!includeExtraPay) return 0;
-  return extraPayRules.baseExtraAmount + getTrainingSupplement(profile, residencyYear);
+  return salaryTables[profile]?.extraPay?.[residencyYear] || 0;
 }
 
 function getGrossTotal(fixed, guards, vacationProration, extraPay) {
@@ -820,7 +840,7 @@ function countsAsAutomaticGuard(guard) {
 }
 
 function getGuardRate(residencyYear, dayType, guardIndex, paymentType) {
-  const rates = guardRates.facultativo[residencyYear];
+  const rates = guardRates.facultyResident[residencyYear];
   if (!rates || paymentType !== "guard") return 0;
   if (dayType === "special") return rates.special;
   const rateGroup = guardIndex >= 5 ? rates.fifthAndFollowing : rates.normal;
@@ -972,7 +992,7 @@ function renderPrintSummary(result) {
   ];
   if (result.guards.ordinaryManualAmount > 0) devengos.push(["Turnos manuales/ordinarios", formatHours(result.guards.ordinaryManualHours), result.guards.ordinaryManualAmount]);
   if (result.vacationProration > 0) devengos.push(["Prorrateo vacaciones", `${formatInputNumber(toNumber(el.vacationDays.value))} días`, result.vacationProration]);
-  if (result.extraPay > 0) devengos.push(["Paga extra", "Base extra + formación", result.extraPay]);
+  if (result.extraPay > 0) devengos.push(["Paga extra", `Tabla VI ${resident}`, result.extraPay]);
   devengos.push(["Total devengado", "Bruto total", result.gross]);
 
   el.printSummary.innerHTML = `
